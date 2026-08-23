@@ -5,155 +5,142 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="Video Game Sales Dashboard", page_icon="🎮", layout="wide")
 
-st.markdown("""<style>
-.title-bar{background:linear-gradient(90deg,#1a1a2e,#16213e,#0f3460);padding:18px;border-radius:10px;margin-bottom:20px;}
-</style>""", unsafe_allow_html=True)
+BG        = "#0D1B2A"
+CARD_BG   = "#1E3A52"
+GRID_CLR  = "#203656"
+TEXT_CLR  = "#FFFFFF"
+ACCENT    = "#4488DD"
+DONUT_COLORS = ["#4488DD","#03F869","#AA55CC","#ebbb6a"]
+
+st.markdown(f"""
+<style>
+  .stApp {{ background-color: {BG}; }}
+  section[data-testid="stSidebar"] {{ background-color: {CARD_BG}; }}
+  h1,h2,h3,h4,p {{ color: {TEXT_CLR} !important; }}
+  .donut-card {{ background:{CARD_BG};border:1px solid {GRID_CLR};border-radius:8px;padding:10px;text-align:center; }}
+  .donut-label {{ color:{ACCENT};font-size:12px;font-weight:600; }}
+</style>
+""", unsafe_allow_html=True)
 
 @st.cache_data
 def load_data():
-    df = pd.read_csv("vg_sales.csv")
+    sales = pd.read_csv("vg_sales.csv")
     genres = pd.read_csv("vg_genres.csv")
     publishers = pd.read_csv("vg_publishers.csv")
 
-    # Merge
-    if 'Genre_ID' in df.columns and 'Genre_ID' in genres.columns:
-        df = df.merge(genres, on='Genre_ID', how='left')
-    if 'Publisher_ID' in df.columns and 'Publisher_ID' in publishers.columns:
-        df = df.merge(publishers, on='Publisher_ID', how='left')
+    if 'Genre_ID' in sales.columns and 'Genre_ID' in genres.columns:
+        sales = sales.merge(genres, on='Genre_ID', how='left')
+    if 'Publisher_ID' in sales.columns and 'Publisher_ID' in publishers.columns:
+        sales = sales.merge(publishers, on='Publisher_ID', how='left')
 
-    df['Publish_Year'] = pd.to_datetime(df['Publish_Year'], errors='coerce').dt.year
-    df = df.dropna(subset=['NA_Sales'])
-    df['Global_Sales'] = df['NA_Sales'] + df['EU_Sales'].fillna(0) + df['JP_Sales'].fillna(0) + df['Other_Sales'].fillna(0)
+    sales['Publish_Year'] = pd.to_datetime(sales['Publish_Year'], errors='coerce').dt.year
+    sales = sales.dropna(subset=['NA_Sales'])
+    sales['Global_Sales'] = (sales['NA_Sales'].fillna(0) + sales['EU_Sales'].fillna(0) +
+                              sales['JP_Sales'].fillna(0) + sales['Other_Sales'].fillna(0))
 
-    genre_col   = [c for c in df.columns if 'genre' in c.lower() and c != 'Genre_ID']
-    pub_col     = [c for c in df.columns if 'publisher' in c.lower() and c != 'Publisher_ID']
-    df['Genre']     = df[genre_col[0]] if genre_col else 'Unknown'
-    df['Publisher'] = df[pub_col[0]]   if pub_col   else 'Unknown'
-    return df
+    gcol = [c for c in sales.columns if 'genre' in c.lower() and c != 'Genre_ID']
+    pcol = [c for c in sales.columns if 'publisher' in c.lower() and c != 'Publisher_ID']
+    sales['Genre']     = sales[gcol[0]] if gcol else 'Unknown'
+    sales['Publisher'] = sales[pcol[0]] if pcol else 'Unknown'
+
+    sales['Month']    = pd.to_datetime(sales['Publish_Year'].astype(str) + '-01-01', errors='coerce').dt.month_name()
+    sales['day_name'] = 'N/A'
+    return sales
 
 df = load_data()
 
-# ── Header ─────────────────────────────────────────────────────────────────────
-st.markdown('<div class="title-bar"><h2 style="color:white;margin:0;">🎮 Global Video Game Sales Dashboard</h2><p style="color:#aab4be;margin:0;">Publisher & Genre Performance Analytics (1980–Present) — Sneha Shree M U</p></div>', unsafe_allow_html=True)
+LAYOUT = dict(
+    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor=CARD_BG,
+    font=dict(color=TEXT_CLR, family="Segoe UI"),
+    margin=dict(l=10,r=10,t=30,b=10)
+)
 
-# ── Sidebar Filters ─────────────────────────────────────────────────────────────
-st.sidebar.title("🔽 Filters")
+# ── Sidebar filters ────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown(f"<h3 style='color:{ACCENT}'>🔽 Filters</h3>", unsafe_allow_html=True)
+    genre_opts = sorted(df['Genre'].dropna().unique())
+    sel_genre  = st.selectbox("Genre", ["All"] + genre_opts)
 
-years = sorted(df['Publish_Year'].dropna().unique().astype(int))
-sel_years = st.sidebar.select_slider("📅 Year Range", options=years, value=(int(min(years)), int(max(years))))
+    yr_min, yr_max = int(df['Publish_Year'].min()), int(df['Publish_Year'].max())
+    sel_years = st.slider("Year Range", yr_min, yr_max, (yr_min, yr_max))
 
-genres = sorted(df['Genre'].dropna().unique())
-sel_genre = st.sidebar.multiselect("🎯 Genre", genres, default=genres)
-
-top_pubs = df.groupby('Publisher')['Global_Sales'].sum().nlargest(30).index.tolist()
-all_pubs = ['All Publishers'] + top_pubs
-sel_pub = st.sidebar.selectbox("🏢 Publisher (Top 30)", all_pubs)
-
-regions_map = {'NA_Sales':'North America','EU_Sales':'Europe','JP_Sales':'Japan','Other_Sales':'Other'}
-sel_region = st.sidebar.selectbox("🌍 Sales Region (for charts)", list(regions_map.values()))
-region_col = {v:k for k,v in regions_map.items()}[sel_region]
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("**👩‍💻 Built by Sneha Shree M U**")
-st.sidebar.markdown("[LinkedIn](https://www.linkedin.com/in/sneha-shree-mu/) | [GitHub](https://github.com/shreesneha056-gif)")
+    game_opts = sorted(df['Game_Name'].dropna().unique())
+    sel_games = st.multiselect("Game Name", game_opts, default=[])
+    st.markdown("---")
+    st.markdown(f"<small style='color:{TEXT_CLR}'>👩‍💻 Sneha Shree M U</small>", unsafe_allow_html=True)
 
 # ── Filter ─────────────────────────────────────────────────────────────────────
-filtered = df[
-    df['Publish_Year'].between(*sel_years) &
-    df['Genre'].isin(sel_genre)
-]
-if sel_pub != 'All Publishers':
-    filtered = filtered[filtered['Publisher'] == sel_pub]
+f = df[df['Publish_Year'].between(*sel_years)]
+if sel_genre != "All":
+    f = f[f['Genre'] == sel_genre]
+if sel_games:
+    f = f[f['Game_Name'].isin(sel_games)]
 
-# ── KPIs ───────────────────────────────────────────────────────────────────────
-st.markdown("### 📌 Key Performance Indicators")
-k1,k2,k3,k4,k5 = st.columns(5)
-k1.metric("🎮 Total Games",         f"{len(filtered):,}")
-k2.metric("🌐 Global Sales (M)",    f"{filtered['Global_Sales'].sum():.1f}M")
-k3.metric("🇺🇸 NA Sales (M)",       f"{filtered['NA_Sales'].sum():.1f}M")
-k4.metric("🇪🇺 EU Sales (M)",       f"{filtered['EU_Sales'].sum():.1f}M")
-k5.metric("🇯🇵 JP Sales (M)",       f"{filtered['JP_Sales'].sum():.1f}M")
+# ── Title ──────────────────────────────────────────────────────────────────────
+st.markdown(f"<h2 style='color:{TEXT_CLR};text-align:center'>🎮 Global Video Game Sales Dashboard</h2>", unsafe_allow_html=True)
 
-st.markdown("---")
+# ── 4 Donut Charts (matching Power BI exactly) ─────────────────────────────────
+st.markdown(f"<h4 style='color:{TEXT_CLR}'>Regional Sales Breakdown</h4>", unsafe_allow_html=True)
+d1, d2, d3, d4 = st.columns(4)
 
-# ── Row 1 ──────────────────────────────────────────────────────────────────────
-c1, c2 = st.columns(2)
+for col, label, region_col, center_color in [
+    (d1, "EU Sales",    "EU_Sales",    "#4488DD"),
+    (d2, "NA Sales",    "NA_Sales",    "#03F869"),
+    (d3, "JP Sales",    "JP_Sales",    "#AA55CC"),
+    (d4, "Other Sales", "Other_Sales", "#ebbb6a"),
+]:
+    total = f[region_col].sum()
+    other = f['Global_Sales'].sum() - total
+    donut_df = pd.DataFrame({
+        'Region': [label, 'Others'],
+        'Sales': [total, max(other, 0)]
+    })
+    fig = px.pie(donut_df, names='Region', values='Sales', hole=0.6,
+                 color_discrete_sequence=[center_color, GRID_CLR])
+    fig.update_traces(textposition='inside', textinfo='percent',
+                      textfont=dict(color=TEXT_CLR, size=11))
+    fig.update_layout(**LAYOUT, height=200, showlegend=False,
+                      annotations=[dict(text=f"<b>{total:.1f}M</b>",
+                                        x=0.5, y=0.5, font_size=13,
+                                        font_color=TEXT_CLR, showarrow=False)])
+    col.markdown(f"<div class='donut-card'><div class='donut-label'>{label}</div>", unsafe_allow_html=True)
+    col.plotly_chart(fig, use_container_width=True)
+    col.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ── Row 2: Column Chart (Top Games) + Decomposition Tree ──────────────────────
+c1, c2 = st.columns([1.6, 1])
 
 with c1:
-    st.markdown("#### 🎯 Sales by Genre")
-    genre_df = filtered.groupby('Genre')['Global_Sales'].sum().reset_index().sort_values('Global_Sales', ascending=True).tail(12)
-    fig = px.bar(genre_df, x='Global_Sales', y='Genre', orientation='h',
-                 color='Global_Sales', color_continuous_scale='Purples',
-                 text=genre_df['Global_Sales'].apply(lambda x: f"{x:.1f}M"))
-    fig.update_traces(textposition='outside')
-    fig.update_layout(height=380, showlegend=False, coloraxis_showscale=False, margin=dict(l=0,r=0,t=10,b=0))
+    st.markdown(f"<h4 style='color:{TEXT_CLR}'>Top Games by Total Sales (Column Chart)</h4>", unsafe_allow_html=True)
+    top_games = f.groupby('Game_Name')['Global_Sales'].sum().nlargest(10).reset_index()
+    top_games.columns = ['Game_Name','Total_Sales']
+    fig = go.Figure(go.Bar(
+        x=top_games['Game_Name'], y=top_games['Total_Sales'],
+        marker_color=ACCENT,
+        text=top_games['Total_Sales'].apply(lambda x: f"{x:.1f}M"),
+        textposition='outside', textfont=dict(color=TEXT_CLR, size=11)
+    ))
+    fig.update_layout(**LAYOUT, height=380,
+                      xaxis=dict(color=TEXT_CLR, tickangle=30, gridcolor=GRID_CLR),
+                      yaxis=dict(color=TEXT_CLR, gridcolor=GRID_CLR))
     st.plotly_chart(fig, use_container_width=True)
 
 with c2:
-    st.markdown("#### 🌍 Regional Sales Breakdown")
-    reg_totals = {
-        'North America': filtered['NA_Sales'].sum(),
-        'Europe':        filtered['EU_Sales'].sum(),
-        'Japan':         filtered['JP_Sales'].sum(),
-        'Other':         filtered['Other_Sales'].sum()
-    }
-    reg_df = pd.DataFrame(list(reg_totals.items()), columns=['Region','Sales'])
-    fig = px.pie(reg_df, names='Region', values='Sales', hole=0.45,
-                 color_discrete_sequence=['#3498db','#2ecc71','#e74c3c','#f39c12'])
-    fig.update_traces(textposition='inside', textinfo='percent+label')
-    fig.update_layout(height=380, margin=dict(l=0,r=0,t=10,b=0))
+    st.markdown(f"<h4 style='color:{TEXT_CLR}'>Global Sales by Year (Decomposition)</h4>", unsafe_allow_html=True)
+    yr_df = f.groupby('Publish_Year')['Global_Sales'].sum().reset_index().sort_values('Publish_Year')
+    yr_df.columns = ['Year','Global_Sales']
+    fig = go.Figure(go.Bar(
+        x=yr_df['Year'], y=yr_df['Global_Sales'],
+        marker_color=ACCENT,
+        text=yr_df['Global_Sales'].apply(lambda x: f"{x:.0f}M"),
+        textposition='outside', textfont=dict(color=TEXT_CLR, size=9)
+    ))
+    fig.update_layout(**LAYOUT, height=380,
+                      xaxis=dict(color=TEXT_CLR, tickangle=45, gridcolor=GRID_CLR),
+                      yaxis=dict(color=TEXT_CLR, gridcolor=GRID_CLR),
+                      title=dict(text="Total Global Sales by Year", font=dict(color=TEXT_CLR, size=12)))
     st.plotly_chart(fig, use_container_width=True)
 
-# ── Row 2 ──────────────────────────────────────────────────────────────────────
-c3, c4 = st.columns(2)
-
-with c3:
-    st.markdown("#### 📅 Global Sales by Year")
-    year_df = filtered.groupby('Publish_Year')['Global_Sales'].sum().reset_index()
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=year_df['Publish_Year'], y=year_df['Global_Sales'],
-                             fill='tozeroy', line=dict(color='#9b59b6', width=2.5),
-                             fillcolor='rgba(155,89,182,0.15)', name='Global Sales'))
-    fig.update_layout(height=320, xaxis_title='Year', yaxis_title='Sales (M)', margin=dict(l=0,r=0,t=10,b=0))
-    st.plotly_chart(fig, use_container_width=True)
-
-with c4:
-    st.markdown(f"#### 🏢 Top 10 Publishers — {sel_region}")
-    pub_df = filtered.groupby('Publisher')[region_col].sum().nlargest(10).reset_index()
-    pub_df.columns = ['Publisher','Sales']
-    fig = px.bar(pub_df, x='Sales', y='Publisher', orientation='h',
-                 color='Sales', color_continuous_scale='Purples',
-                 text=pub_df['Sales'].apply(lambda x: f"{x:.1f}M"))
-    fig.update_traces(textposition='outside')
-    fig.update_layout(height=320, showlegend=False, coloraxis_showscale=False,
-                      yaxis={'categoryorder':'total ascending'}, margin=dict(l=0,r=0,t=10,b=0))
-    st.plotly_chart(fig, use_container_width=True)
-
-# ── Row 3 ──────────────────────────────────────────────────────────────────────
-c5, c6 = st.columns(2)
-
-with c5:
-    st.markdown("#### 🏆 Top 10 Best-Selling Games")
-    top_games = filtered.nlargest(10, 'Global_Sales')[['Game_Name','Global_Sales','Genre','Publisher','Publish_Year']]
-    fig = px.bar(top_games, x='Global_Sales', y='Game_Name', orientation='h',
-                 color='Genre', text=top_games['Global_Sales'].apply(lambda x: f"{x:.1f}M"),
-                 color_discrete_sequence=px.colors.qualitative.Set2)
-    fig.update_traces(textposition='outside')
-    fig.update_layout(height=350, yaxis={'categoryorder':'total ascending'}, margin=dict(l=0,r=0,t=10,b=0))
-    st.plotly_chart(fig, use_container_width=True)
-
-with c6:
-    st.markdown("#### 🎯 Genre Performance by Region")
-    genre_region = filtered.groupby('Genre')[['NA_Sales','EU_Sales','JP_Sales']].sum().reset_index().nlargest(8,'NA_Sales')
-    fig = go.Figure()
-    fig.add_trace(go.Bar(name='NA', x=genre_region['Genre'], y=genre_region['NA_Sales'], marker_color='#3498db'))
-    fig.add_trace(go.Bar(name='EU', x=genre_region['Genre'], y=genre_region['EU_Sales'], marker_color='#2ecc71'))
-    fig.add_trace(go.Bar(name='JP', x=genre_region['Genre'], y=genre_region['JP_Sales'], marker_color='#e74c3c'))
-    fig.update_layout(barmode='group', height=350, margin=dict(l=0,r=0,t=10,b=0), xaxis_tickangle=30)
-    st.plotly_chart(fig, use_container_width=True)
-
-with st.expander("📋 View Raw Data"):
-    show_cols = ['Game_Name','Genre','Publisher','Publish_Year','Global_Sales','NA_Sales','EU_Sales','JP_Sales','Other_Sales']
-    st.dataframe(filtered[show_cols].sort_values('Global_Sales', ascending=False).head(500), use_container_width=True)
-
-st.caption("🎓 Built by Sneha Shree M U | Data Analyst & Data Scientist | Bangalore")
+st.caption("Built by Sneha Shree M U | Data Analyst & Data Scientist | Bangalore")
