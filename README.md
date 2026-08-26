@@ -7,6 +7,9 @@
 
 > Interactive Streamlit dashboard replicating a Power BI report — analyzing global video game sales (1980–2016) across regions, genres, publishers, and top-selling games.
 
+## 🌐 Live Demo
+**👉 [Open Dashboard](https://video-game-sales-analysis-dashboard.streamlit.app/)**
+
 ---
 
 ## 🎯 Dashboard Overview
@@ -20,20 +23,18 @@
 | Total Global Sales | 8,916 |
 
 ## 📊 Charts (exact Power BI replica)
-
-- **4 Donut KPI Cards** — EU Sales % (cyan) / NA Sales % (blue) / JP Sales % (purple) / Other Sales % (amber)
+- **4 Donut KPI Cards** — EU % (cyan) / NA % (blue) / JP % (purple) / Other % (amber)
 - **4 Top Game Buttons** — Wii Sports / Super Mario Bros / Mario Kart Wii / Wii Sports Resort
 - **Decomposition Tree** — Total Global Sales by Day Name → Month → Year
 - **Column Chart** — Sum of Total Sales by Game Name (top 10)
 
 ## 🔽 Filters
 - Genre dropdown (Action / Sports / Racing / RPG etc.)
-- Year range slider (1980–2016)
-- Clear all slicers button
+- Year range slider (1980–2016) + Clear all slicers button
 
 ## 🛠️ Tech Stack
 - **Dashboard:** Streamlit, Plotly
-- **Data:** Python, Pandas, SQL (MS SQL Server — T-SQL joins, LAG window functions)
+- **Data:** Python, Pandas, SQL (MS SQL Server — T-SQL, LAG window functions)
 - **BI Tool:** Power BI (original design)
 - **Deployment:** Streamlit Community Cloud
 
@@ -44,11 +45,11 @@ video-game-sales-analysis/
 ├── vg_sales.csv         # Game sales dataset (16,594 records)
 ├── vg_genres.csv        # Genre lookup
 ├── vg_publishers.csv    # Publisher lookup
-├── requirements.txt     # Dependencies
+├── requirements.txt
 ├── Video_Game_Sales_project/
-│   ├── Data/            # Raw CSV data
-│   ├── sql/             # SQL queries
-│   └── DashBoard/       # Power BI screenshots
+│   ├── Data/
+│   ├── sql/
+│   └── DashBoard/
 └── README.md
 ```
 
